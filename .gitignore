@@ -1,0 +1,12 @@
+.dep/
+*~
+*.eep
+*.elf
+*.hex
+*.lss
+*.lst
+*.map
+*.o
+*.sym
+u8glib/
+

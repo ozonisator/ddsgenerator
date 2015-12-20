@@ -1,0 +1,3 @@
+[submodule "AtmelLib"]
+	path = AtmelLib
+	url = https://github.com/Virtex7/AtmelLib
