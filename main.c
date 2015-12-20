@@ -31,10 +31,10 @@ DATA	D8	B0
 
 volatile int8_t enc_delta;			// Drehgeberbewegung zwischen
 static int8_t last;				// zwei Auslesungen im Hauptprogramm
-uint8_t val = 0;
+int8_t val = 0;
 uint32_t frequenz = 1337;			//variable für frequenz
 uint8_t umschaltung = 0;			//variable für die umschaltung frequenz/dezimalstelle
-uint8_t cursor = 0;				//cursorposition
+
 
 /*
 #define MENU_ITEMS 4
@@ -68,7 +68,7 @@ void uart_puts (char *s)
 
 
  
-ISR( TIMER0_COMPA_vect )			// 1ms fuer manuelle Eingabe
+ISR( TIMER0_COMPA_vect )				// 1ms fuer manuelle Eingabe
 {
 	int8_t new, diff;
 	new = 0;
@@ -90,7 +90,7 @@ ISR (INT0_vect)
 	umschaltung = umschaltung == 0 ? 1 : 0;
 }
 
-void encode_init( void )			// nur Timer 0 initialisieren
+void encode_init( void )				// nur Timer 0 initialisieren
 {
 
 	int8_t new;
@@ -107,7 +107,7 @@ void encode_init( void )			// nur Timer 0 initialisieren
 	TIMSK0 |= 1<<OCIE0A;
 }
  
-int8_t encode_read( void )					// Encoder auslesen
+int8_t encode_read( void )				// Encoder auslesen
 {
 	int8_t val;
 	cli();
@@ -183,18 +183,18 @@ void AD9850reset(){
 //displaytest)
 void draw(void)
 {
-	uint8_t cursorpos = 5;
-	cursorpos = val*11;
-	if (cursorpos > 90){
-		cursorpos = 10;
-		}
+	static uint8_t cursorpos = 0;				//cursorposition
+	cursorpos += 9;
+	cursorpos += val;
+	val=0;
+	cursorpos = cursorpos%9;
 	
 	//u8g_SetFont(&u8g, u8g_font_gdr17);
 	u8g_SetFont(&u8g, u8g_font_7x14);
 	u8g_DrawStr(&u8g, 40, 15, u8g_u16toa(cursorpos,3));
 	u8g_SetCursorFont(&u8g, u8g_font_cursorr);
 	u8g_SetCursorStyle(&u8g, 54);
-	u8g_SetCursorPos(&u8g, cursorpos, 40);
+	u8g_SetCursorPos(&u8g, cursorpos*11, 40);
 	u8g_EnableCursor(&u8g);
 	if (umschaltung == 0){
 		u8g_DrawStr(&u8g, 40, 25, "FREQ");
@@ -273,3 +273,4 @@ int main (void) {
 		
 }
 }
+
