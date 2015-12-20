@@ -26,12 +26,15 @@ DATA	D8	B0
 #define BAUD 9600				//Baudrate
 #define BAUDRATE ((F_CPU)/(BAUD*16UL)-1)	//Umrechnung für UBBR
 #define XTAL	16e6				//16MHz
-#define PHASE_A		(PIND & 1<<PD3)		// an Pinbelegung anpassen
-#define PHASE_B		(PIND & 1<<PD2)		// an Pinbelegung anpassen
+#define PHASE_A		(PIND & 1<<PD4)		// an Pinbelegung anpassen
+#define PHASE_B		(PIND & 1<<PD5)		// an Pinbelegung anpassen
 
 volatile int8_t enc_delta;			// Drehgeberbewegung zwischen
 static int8_t last;				// zwei Auslesungen im Hauptprogramm
 uint8_t val = 0;
+uint32_t frequenz = 1337;			//variable für frequenz
+uint8_t umschaltung = 0;			//variable für die umschaltung frequenz/dezimalstelle
+uint8_t cursor = 0;				//cursorposition
 
 /*
 #define MENU_ITEMS 4
@@ -78,6 +81,13 @@ ISR( TIMER0_COMPA_vect )			// 1ms fuer manuelle Eingabe
 		last = new;			// store new as next last
 		enc_delta += (diff & 2) - 1;	// bit 1 = direction (+/-)
 			}
+}
+
+
+
+ISR (INT0_vect)
+{
+	umschaltung = umschaltung == 0 ? 1 : 0;
 }
 
 void encode_init( void )			// nur Timer 0 initialisieren
@@ -173,10 +183,24 @@ void AD9850reset(){
 //displaytest)
 void draw(void)
 {
-	u8g_SetFont(&u8g, u8g_font_gdr17);
-	val += (encode_read());
-	u8g_DrawStr(&u8g, 40, 25, u8g_u16toa(val,3));
+	uint8_t cursorpos = 5;
+	cursorpos = val*11;
+	if (cursorpos > 90){
+		cursorpos = 10;
+		}
 	
+	//u8g_SetFont(&u8g, u8g_font_gdr17);
+	u8g_SetFont(&u8g, u8g_font_7x14);
+	u8g_DrawStr(&u8g, 40, 15, u8g_u16toa(cursorpos,3));
+	u8g_SetCursorFont(&u8g, u8g_font_cursorr);
+	u8g_SetCursorStyle(&u8g, 54);
+	u8g_SetCursorPos(&u8g, cursorpos, 40);
+	u8g_EnableCursor(&u8g);
+	if (umschaltung == 0){
+		u8g_DrawStr(&u8g, 40, 25, "FREQ");
+		}
+	else
+		u8g_DrawStr(&u8g, 40, 25, "DEC.");
 }
 
 
@@ -208,16 +232,27 @@ int main (void) {
 	DDRB = 1<<PB0 | 1<<PB1 | 1<<PB2 | 1<<PB3;
 	DDRD = 0xff;
 	char s[7];
-	delayms(1);
+
+	DDRD &= ~(1 << DDD2); 
+	PORTD |= (1 << PORTD2);
+	EIMSK |= (1 << INT0); 
+	EICRA |= (1 << ISC01);
+	
+
+	delayus(1);
 	AD9850reset();
-	delayms(1);
-	sendAD9850(40000, 0);				
+	delayus(1);
+	//sendAD9850(40000, 0);				
+	
+
+
+
 	encode_init();
 	uart_init();
 	sei();
 
 	u8g_InitI2C(&u8g, &u8g_dev_ssd1306_128x64_i2c, U8G_I2C_OPT_NONE);
-while(1) {
+
 	for(;;)
 		{  
 		u8g_FirstPage(&u8g);
@@ -228,9 +263,13 @@ while(1) {
 		}
 		while ( u8g_NextPage(&u8g) );
 			//menu_current = val;
+
+			
+			
+			val+= (encode_read());
 			uart_puts( itoa( val, s, 10 ) );
 			uart_putc('\n');			// \n line feed
 			uart_putc('\r');
-		}
+		
 }
 }
