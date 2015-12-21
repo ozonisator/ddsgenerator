@@ -23,18 +23,21 @@ DATA	D8	B0
 #include <stdint.h>
 #include <avr/pgmspace.h>
 
+
 #define BAUD 9600				//Baudrate
 #define BAUDRATE ((F_CPU)/(BAUD*16UL)-1)	//Umrechnung für UBBR
 #define XTAL	16e6				//16MHz
 #define PHASE_A		(PIND & 1<<PD4)		// an Pinbelegung anpassen
 #define PHASE_B		(PIND & 1<<PD5)		// an Pinbelegung anpassen
+#define DDSMAXFREQ	40e6			//DDS Maximalfrequenz 40MHz!
 
 volatile int8_t enc_delta;			// Drehgeberbewegung zwischen
 static int8_t last;				// zwei Auslesungen im Hauptprogramm
 int8_t val = 0;
-uint32_t frequenz = 1337;			//variable für frequenz
+uint32_t frequenz = 4;			//variable für frequenz
 uint8_t umschaltung = 0;			//variable für die umschaltung frequenz/dezimalstelle
 
+char buf[10];
 
 /*
 #define MENU_ITEMS 4
@@ -58,29 +61,53 @@ void uart_putc(unsigned char c)
 
 void uart_puts (char *s)
 {
-	while (*s)
-		{
+	while (*s){
 		uart_putc(*s);
 		s++;
 		}
 }
 
+/*uint32_t ipow(uint8_t base, uint8_t exp)
+{
+    uint32_t result = 1;
+    while (exp)
+    {
+        if (exp & 1)
+            result *= base;
+        exp >>= 1;
+        base *= base;
+    }
+
+    return result;
+}
+*/
+
+
+
+uint32_t ipow(uint8_t base, uint8_t exp)
+{
+	uint32_t result = 1;
+	while(exp) { 
+		result *= base; exp--; 
+		}
+	return result;
+}
 
 
  
-ISR( TIMER0_COMPA_vect )				// 1ms fuer manuelle Eingabe
+ISR( TIMER0_COMPA_vect )			// 1ms fuer manuelle Eingabe
 {
 	int8_t new, diff;
 	new = 0;
 	if( PHASE_A )
 		new = 3;
 	if( PHASE_B )
-			new ^= 1;		// convert gray to binary
-	diff = last - new;			// difference last - new
+		new ^= 1;		// convert gray to binary
+		diff = last - new;			// difference last - new
 	if( diff & 1 ){				// bit 0 = value (1)
 		last = new;			// store new as next last
 		enc_delta += (diff & 2) - 1;	// bit 1 = direction (+/-)
-			}
+		}
 }
 
 
@@ -180,52 +207,36 @@ void AD9850reset(){
 }
 
 
-//displaytest)
+
 void draw(void)
 {
 	static uint8_t cursorpos = 0;				//cursorposition
-	cursorpos += 9;
-	cursorpos += val;
-	val=0;
-	cursorpos = cursorpos%9;
+	if (umschaltung == 1){
+		cursorpos += 8;
+		cursorpos += val%8;	
+		cursorpos = cursorpos%8;
+		
+	}
 	
-	//u8g_SetFont(&u8g, u8g_font_gdr17);
-	u8g_SetFont(&u8g, u8g_font_7x14);
-	u8g_DrawStr(&u8g, 40, 15, u8g_u16toa(cursorpos,3));
+	
+	u8g_SetFont(&u8g, u8g_font_gdr17);
+	sprintf(buf, " %08"PRIu32 ,frequenz);
+	u8g_DrawStr(&u8g, 3, 18, buf);
 	u8g_SetCursorFont(&u8g, u8g_font_cursorr);
 	u8g_SetCursorStyle(&u8g, 54);
-	u8g_SetCursorPos(&u8g, cursorpos*11, 40);
+	u8g_SetCursorPos(&u8g, cursorpos*13+15, 21);
 	u8g_EnableCursor(&u8g);
 	if (umschaltung == 0){
-		u8g_DrawStr(&u8g, 40, 25, "FREQ");
+		frequenz+=val*(ipow(10, cursorpos));
+		u8g_DrawStr(&u8g, 0, 56, "f/Hz");
+		
 		}
 	else
-		u8g_DrawStr(&u8g, 40, 25, "DEC.");
+		u8g_DrawStr(&u8g, 0, 56, "Cursor");
+	val=0;
 }
 
 
-
-/*
-//menü test analog beispiel u8glib
-void draw_menu(void) {
-	uint8_t i, h;
-	u8g_uint_t w, d;
-	u8g_SetFont(&u8g, u8g_font_6x13);
-	u8g_SetFontRefHeightText(&u8g);
-	u8g_SetFontPosTop(&u8g);
-	h = u8g_GetFontAscent(&u8g)-u8g_GetFontDescent(&u8g);
-	w = u8g_GetWidth(&u8g);
-	for( i = 0; i < MENU_ITEMS; i++ ) {        // draw all menu items
-		d = (w-u8g_GetStrWidth(&u8g, menu_strings[i]))/2;
-		u8g_SetDefaultForegroundColor(&u8g);
-		if ( i == menu_current ) {               // current selected menu item
-		u8g_DrawBox(&u8g, 0, i*h+1, w, h);     // draw cursor bar
-		u8g_SetDefaultBackgroundColor(&u8g);
-			}
-		u8g_DrawStr(&u8g, d, i*h, menu_strings[i]);
-		}
-}
-*/
 
 
 int main (void) {
@@ -242,7 +253,7 @@ int main (void) {
 	delayus(1);
 	AD9850reset();
 	delayus(1);
-	//sendAD9850(40000, 0);				
+	sendAD9850(40000, 0);				
 	
 
 
