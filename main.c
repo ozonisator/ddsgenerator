@@ -34,9 +34,10 @@ DATA	D8	B0
 volatile int8_t enc_delta;			// Drehgeberbewegung zwischen
 static int8_t last;				// zwei Auslesungen im Hauptprogramm
 int8_t val = 0;
-uint32_t frequenz = 4;			//variable für frequenz
+uint32_t frequenz = 0;				//variable für frequenz
+uint32_t frequenzalt = 0;
 uint8_t umschaltung = 0;			//variable für die umschaltung frequenz/dezimalstelle
-
+uint8_t cursorpos = 0;	
 char buf[10];
 
 /*
@@ -67,24 +68,9 @@ void uart_puts (char *s)
 		}
 }
 
+
+
 /*uint32_t ipow(uint8_t base, uint8_t exp)
-{
-    uint32_t result = 1;
-    while (exp)
-    {
-        if (exp & 1)
-            result *= base;
-        exp >>= 1;
-        base *= base;
-    }
-
-    return result;
-}
-*/
-
-
-
-uint32_t ipow(uint8_t base, uint8_t exp)
 {
 	uint32_t result = 1;
 	while(exp) { 
@@ -92,7 +78,7 @@ uint32_t ipow(uint8_t base, uint8_t exp)
 		}
 	return result;
 }
-
+*/
 
  
 ISR( TIMER0_COMPA_vect )			// 1ms fuer manuelle Eingabe
@@ -117,7 +103,7 @@ ISR (INT0_vect)
 	umschaltung = umschaltung == 0 ? 1 : 0;
 }
 
-void encode_init( void )				// nur Timer 0 initialisieren
+void encode_init( void )					// nur Timer 0 initialisieren
 {
 
 	int8_t new;
@@ -134,7 +120,7 @@ void encode_init( void )				// nur Timer 0 initialisieren
 	TIMSK0 |= 1<<OCIE0A;
 }
  
-int8_t encode_read( void )				// Encoder auslesen
+int8_t encode_read( void )					// Encoder auslesen
 {
 	int8_t val;
 	cli();
@@ -179,7 +165,7 @@ uint32_t word = ((uint64_t)freq<<26) / 1953125;
 			cbi(PORTB, PB0);
 			}
 	CLK();
-	}
+		}
 	cbi(PORTB, PB0);				// CONTROL Bits 0, pwdwn ebenfalls 0
 	CLK();
 	CLK();
@@ -210,30 +196,55 @@ void AD9850reset(){
 
 void draw(void)
 {
-	static uint8_t cursorpos = 0;				//cursorposition
+	val+= (encode_read());
 	if (umschaltung == 1){
 		cursorpos += 8;
 		cursorpos += val%8;	
-		cursorpos = cursorpos%8;
+		cursorpos = (cursorpos%8);
+	
 		
 	}
 	
 	
 	u8g_SetFont(&u8g, u8g_font_gdr17);
+	if (frequenz >= 40000000){
+			frequenz=40000000;
+		}
+		if (frequenz <= 1){
+			frequenz = 1;
+		}
+	
 	sprintf(buf, " %08"PRIu32 ,frequenz);
 	u8g_DrawStr(&u8g, 3, 18, buf);
 	u8g_SetCursorFont(&u8g, u8g_font_cursorr);
 	u8g_SetCursorStyle(&u8g, 54);
 	u8g_SetCursorPos(&u8g, cursorpos*13+15, 21);
 	u8g_EnableCursor(&u8g);
+	u8g_DrawVLine(&u8g, 35,18, 8);
+	u8g_DrawVLine(&u8g, 34,18, 8);
+	u8g_DrawVLine(&u8g, 73,18, 8);
+	u8g_DrawVLine(&u8g, 74,18, 8);
 	if (umschaltung == 0){
-		frequenz+=val*(ipow(10, cursorpos));
-		u8g_DrawStr(&u8g, 0, 56, "f/Hz");
+		switch(cursorpos){
+			case 7: frequenz += val; 		break; 
+			case 6: frequenz += 10 * val; 		break; 
+			case 5: frequenz += 100 * val; 		break; 
+			case 4: frequenz += 1000 * val; 	break; 
+			case 3: frequenz += 10000 * val; 	break; 
+			case 2: frequenz += 100000 * val;	break; 
+			case 1: frequenz += 1000000 * val;	break; 
+			case 0: frequenz += 10000000 * val;	break; 
+			default: 			;	break;
+
+		}
 		
+		//frequenz+=val*(ipow(10, cursorpos));
+		u8g_DrawStr(&u8g, 0, 56, "f/Hz");
+		val=0;
 		}
 	else
 		u8g_DrawStr(&u8g, 0, 56, "Cursor");
-	val=0;
+		val=0;
 }
 
 
@@ -271,14 +282,15 @@ int main (void) {
 		{
 		//draw_menu();   
 		draw();
+		
 		}
 		while ( u8g_NextPage(&u8g) );
 			//menu_current = val;
 
 			
 			
-			val+= (encode_read());
-			uart_puts( itoa( val, s, 10 ) );
+			
+			uart_puts( itoa( cursorpos, s, 10 ) );
 			uart_putc('\n');			// \n line feed
 			uart_putc('\r');
 		
